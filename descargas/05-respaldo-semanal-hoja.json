@@ -1,0 +1,278 @@
+{
+  "name": "05 Respaldo semanal de una hoja de cálculo",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "235e12af-e207-5559-b2d4-5bbd6a46626a",
+              "name": "hoja_id",
+              "value": "PEGA_AQUI_EL_ID_DE_TU_HOJA",
+              "type": "string"
+            },
+            {
+              "id": "e495ec44-4943-5d40-98aa-cdb85a06a412",
+              "name": "nombre_hoja",
+              "value": "Mi hoja importante",
+              "type": "string"
+            },
+            {
+              "id": "f1c302d5-ae30-52d5-8e19-d866273aaeef",
+              "name": "telegram_chat_id",
+              "value": "PEGA_AQUI_TU_CHAT_ID",
+              "type": "string"
+            },
+            {
+              "id": "02e18b50-4871-5eca-8673-8250335c48a9",
+              "name": "correo_aviso",
+              "value": "tu@correo.com",
+              "type": "string"
+            },
+            {
+              "id": "1b40cd1e-32f4-548d-90c7-52ead21cdb3a",
+              "name": "asunto_aviso",
+              "value": "Respaldo semanal de tu hoja",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "9311a1f2-cc99-503c-b955-f84066887a00",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "d0e92a24-d9b6-59b8-8d1c-8f45c7ad3563",
+      "name": "Cada lunes a las 6:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -240,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d5b1c1de-c421-5812-a36c-fb9c38116bea",
+      "name": "Ejecutar a mano (pruebas)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.hoja_id }}",
+          "mode": "id"
+        },
+        "name": "={{ 'Respaldo - ' + $('Configuración').first().json.nombre_hoja + ' - ' + $now.toFormat('yyyy-MM-dd') }}",
+        "sameFolder": true,
+        "options": {}
+      },
+      "id": "3c79aa5a-34c2-5a17-805c-b09ee3b8d9f4",
+      "name": "Copiar la hoja en Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        240,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Configuración').first().json.telegram_chat_id }}",
+        "text": "={{ 'Respaldo listo: ' + ($json.name || $('Configuración').first().json.nombre_hoja) + '\\nhttps://drive.google.com/open?id=' + $json.id }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d57cab31-2bb6-525e-bb95-38cb4fee9f41",
+      "name": "Avisar respaldo OK por Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('Configuración').first().json.correo_aviso }}",
+        "subject": "={{ $('Configuración').first().json.asunto_aviso }}",
+        "emailType": "text",
+        "message": "={{ 'Respaldo listo: ' + ($json.name || $('Configuración').first().json.nombre_hoja) + '\\nhttps://drive.google.com/open?id=' + $json.id }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "af21a45f-8baf-5905-8302-84450b25c98e",
+      "name": "Avisar respaldo OK por correo (desactivado)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        500,
+        400
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Configuración').first().json.telegram_chat_id }}",
+        "text": "={{ 'ERROR: no se pudo respaldar \"' + $('Configuración').first().json.nombre_hoja + '\". Revisa la ejecución en n8n: ' + ($json.error ? ($json.error.message || JSON.stringify($json.error)) : 'error desconocido') }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "dbe959a4-f565-5c6a-bf85-ea90d2649894",
+      "name": "Avisar ERROR por Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        500,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('Configuración').first().json.correo_aviso }}",
+        "subject": "={{ $('Configuración').first().json.asunto_aviso }}",
+        "emailType": "text",
+        "message": "={{ 'ERROR: no se pudo respaldar \"' + $('Configuración').first().json.nombre_hoja + '\". Revisa la ejecución en n8n: ' + ($json.error ? ($json.error.message || JSON.stringify($json.error)) : 'error desconocido') }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "800641aa-43d7-56aa-976f-b9761f3fb8b6",
+      "name": "Avisar ERROR por correo (desactivado)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        500,
+        720
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "## 5. Respaldo semanal\nCada lunes 6:00 hace una **copia completa** de tu hoja en tu Drive (`Respaldo - nombre - fecha`) y te avisa. Si falla, te avisa del error (no falla en silencio).\n\nLas copias se quedan en la misma carpeta que la hoja; bórralas tú de vez en cuando (el flujo nunca borra nada).\n\n**Antes de activar:** 1) edita el nodo *Configuración*; 2) abre cada nodo con credencial y elige la tuya; 3) prueba con *Execute workflow*; 4) activa el flujo (interruptor Active).",
+        "height": 280,
+        "width": 560
+      },
+      "id": "edad03c5-f34f-5f04-a608-2aa4f8194c5f",
+      "name": "Nota: Cómo usar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -20
+      ]
+    }
+  ],
+  "connections": {
+    "Cada lunes a las 6:00": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutar a mano (pruebas)": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Copiar la hoja en Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copiar la hoja en Drive": {
+      "main": [
+        [
+          {
+            "node": "Avisar respaldo OK por Telegram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Avisar respaldo OK por correo (desactivado)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Avisar ERROR por Telegram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Avisar ERROR por correo (desactivado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "active": false
+}

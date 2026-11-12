@@ -1,0 +1,328 @@
+{
+  "name": "01 Formulario web a Google Sheets y aviso",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "235e12af-e207-5559-b2d4-5bbd6a46626a",
+              "name": "hoja_id",
+              "value": "PEGA_AQUI_EL_ID_DE_TU_HOJA",
+              "type": "string"
+            },
+            {
+              "id": "70c4ca31-05e4-5a97-aed2-9591dd51b717",
+              "name": "pestana",
+              "value": "Contactos",
+              "type": "string"
+            },
+            {
+              "id": "f1c302d5-ae30-52d5-8e19-d866273aaeef",
+              "name": "telegram_chat_id",
+              "value": "PEGA_AQUI_TU_CHAT_ID",
+              "type": "string"
+            },
+            {
+              "id": "02e18b50-4871-5eca-8673-8250335c48a9",
+              "name": "correo_aviso",
+              "value": "tu@correo.com",
+              "type": "string"
+            },
+            {
+              "id": "1b40cd1e-32f4-548d-90c7-52ead21cdb3a",
+              "name": "asunto_aviso",
+              "value": "Nuevo contacto desde tu sitio web",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "debf50a5-12aa-5c3c-97ef-50c9dc75195e",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "formulario-contacto",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a4f3e4cd-1dfe-53a2-b2bd-a4e978e4be8c",
+      "name": "Formulario recibido (Webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        300
+      ],
+      "webhookId": "19015537-97ec-50b7-b3c5-c2675c880224"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Acepta JSON o formulario (nombre, correo, telefono, mensaje). 'sitio_web' es un campo trampa para bots.\nconst b = $('Formulario recibido (Webhook)').first().json.body || {};\nconst t = (v) => String(v ?? '').trim().slice(0, 1000);\nconst correo = t(b.correo || b.email).toLowerCase();\nconst d = {\n  fecha: $now.toFormat('yyyy-MM-dd HH:mm'),\n  nombre: t(b.nombre), correo, telefono: t(b.telefono || b.whatsapp), mensaje: t(b.mensaje),\n};\nconst correoOk = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(correo);\nconst esBot = t(b.sitio_web) !== '';\nd.valido = !esBot && d.nombre !== '' && (correoOk || d.telefono !== '') && d.mensaje !== '';\nd.motivo = d.valido ? '' : (esBot ? 'bot' : 'faltan datos: nombre, mensaje y correo o teléfono');\nreturn [{ json: d }];"
+      },
+      "id": "2b3e8d37-ce18-5ff7-8b6c-3a69591548b9",
+      "name": "Validar y limpiar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d790469a-463b-5eae-9c3e-024e54143f94",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c654c9a5-12ad-5e16-a0dd-38665911aec4",
+      "name": "¿Datos válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.hoja_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.pestana }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha": "={{ $json.fecha }}",
+            "Nombre": "={{ $json.nombre }}",
+            "Correo": "={{ $json.correo }}",
+            "Teléfono": "={{ $json.telefono }}",
+            "Mensaje": "={{ $json.mensaje }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "55918f99-2aff-5517-aa54-27b250551226",
+      "name": "Guardar en Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        720,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Configuración').first().json.telegram_chat_id }}",
+        "text": "={{ 'Nuevo contacto web\\n' + $('Validar y limpiar').first().json.nombre + '\\n' + ($('Validar y limpiar').first().json.correo || '') + ' ' + ($('Validar y limpiar').first().json.telefono || '') + '\\n\\n' + $('Validar y limpiar').first().json.mensaje }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "7ddb3d7b-07dd-5180-baea-790659354732",
+      "name": "Avisar por Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        960,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('Configuración').first().json.correo_aviso }}",
+        "subject": "={{ $('Configuración').first().json.asunto_aviso }}",
+        "emailType": "text",
+        "message": "={{ 'Nuevo contacto web\\n' + $('Validar y limpiar').first().json.nombre + '\\n' + ($('Validar y limpiar').first().json.correo || '') + ' ' + ($('Validar y limpiar').first().json.telefono || '') + '\\n\\n' + $('Validar y limpiar').first().json.mensaje }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a280941f-e8d6-5a52-ac66-86011e9a39d4",
+      "name": "Avisar por correo (desactivado)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        400
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, mensaje: 'Gracias, recibimos tu mensaje.' } }}",
+        "options": {}
+      },
+      "id": "060f9e37-b6d8-5103-896f-afcfa4152605",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: $json.motivo } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "d913f699-b590-500a-a2a0-4e27b6ac57e8",
+      "name": "Responder error 400",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1. Formulario web → Hoja → Aviso\nRecibe un POST en `/formulario-contacto` (producción: `/webhook/formulario-contacto`), valida, guarda una fila y te avisa por **Telegram** (activo) o **correo** (desactivado: enciéndelo si lo prefieres).\n\nColumnas de tu hoja (fila 1): `Fecha  Nombre  Correo  Teléfono  Mensaje`.\n\n**Antes de activar:** 1) edita el nodo *Configuración*; 2) abre cada nodo con credencial y elige la tuya; 3) prueba con *Execute workflow*; 4) activa el flujo (interruptor Active).",
+        "height": 300,
+        "width": 520
+      },
+      "id": "a957b98c-0dd0-5322-973d-1d424deffc16",
+      "name": "Nota: Cómo usar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        20
+      ]
+    }
+  ],
+  "connections": {
+    "Formulario recibido (Webhook)": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Validar y limpiar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y limpiar": {
+      "main": [
+        [
+          {
+            "node": "¿Datos válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos válidos?": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error 400",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Avisar por Telegram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Avisar por correo (desactivado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avisar por Telegram": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "active": false
+}
